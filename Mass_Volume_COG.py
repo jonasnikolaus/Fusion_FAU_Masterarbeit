@@ -149,7 +149,7 @@ def run(context):
 
                 # Überprüfen, ob ein Design geöffnet ist
                 if not design:
-                    return f"Die Datei enthält kein gültiges Design: {file.name}"
+                    return [file.name, "Die Datei enthält kein gültiges Design"]
 
                 # Zugriff auf die Root-Komponente des Designs
                 rootComp = design.rootComponent
@@ -223,33 +223,52 @@ def run(context):
                         ]
 
                         # Ergebnisanzeige
-                        discrepancies = [check[0] for check in checks if not check[1]]
-
-                        if discrepancies:
-                            return f"Datei: {file.name}\nDie folgenden Eigenschaften stimmen nicht überein:\n" + "\n".join(discrepancies)
-                        else:
-                            return f"Datei: {file.name}\nAlle Eigenschaften stimmen mit der Musterlösung überein."
+                        results = [file.name, body.name]
+                        discrepancies = []
+                        for check in checks:
+                            if check[1]:
+                                results.append('Y')
+                            else:
+                                results.append('N')
+                                discrepancies.append(check[0])
+                        return results, discrepancies
 
             except:
-                return f"Fehler beim Überprüfen der Datei: {file.name}\nFehler: {traceback.format_exc()}"
+                return [file.name, "Fehler beim Überprüfen der Datei", traceback.format_exc()], []
             finally:
                 # Schließen des Dokuments
                 if doc:
                     doc.close(False)
 
         # Protokollierung der Ergebnisse
-        results = []
+        all_results = []
+        headers = [
+            'Dateiname', 'Körpername', 'Volumen', 'Oberfläche', 'Schwerpunkt',
+            'Material', 'Masse', 'Trägheitsmomente', 'Anzahl der Flächen',
+            'Anzahl der Kanten', 'Anzahl der Scheitelpunkte', 'Flächenflächen',
+            'Kantenlängen', 'Scheitelpunktkoordinaten'
+        ]
+        all_results.append(headers)
+        discrepancies_list = []
+
         for file in files_to_check:
-            result = check_file(file)
-            results.append(result)
+            result, discrepancies = check_file(file)
+            all_results.append(result)
+            if discrepancies:
+                discrepancies_list.append((file.name, discrepancies))
 
         # Ergebnisse in einer CSV-Datei speichern
         output_file = os.path.join(os.path.expanduser('~'), 'Fusion360_Check_Results.csv')
         with open(output_file, 'w', newline='') as csvfile:
             csv_writer = csv.writer(csvfile)
-            csv_writer.writerow(['Dateiname', 'Ergebnis'])
-            for result in results:
-                csv_writer.writerow([result.split('\n')[0], result])
+            csv_writer.writerows(all_results)
+
+            # Fehlerhafte Dateien am Ende der CSV-Datei hinzufügen
+            if discrepancies_list:
+                csv_writer.writerow([])
+                csv_writer.writerow(['In folgenden Dateien sind Fehler:'])
+                for file_name, discrepancies in discrepancies_list:
+                    csv_writer.writerow([file_name, ', '.join(discrepancies)])
 
         # Ausgabe der Ergebnisse
         ui.messageBox("Überprüfung abgeschlossen. Ergebnisse sind in der Datei gespeichert:\n" + output_file)

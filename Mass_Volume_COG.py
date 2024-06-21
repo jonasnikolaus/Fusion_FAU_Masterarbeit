@@ -110,98 +110,143 @@ def run(context):
         # Zugriff auf die aktuelle Anwendung und Benutzeroberfläche
         app = adsk.core.Application.get()
         ui = app.userInterface
-        
-        # Zugriff auf das aktive Produkt (Design)
-        product = app.activeProduct
-        design = adsk.fusion.Design.cast(product)
-        
-        # Überprüfen, ob ein Design geöffnet ist
-        if not design:
-            ui.messageBox('Bitte öffnen Sie ein Design, bevor Sie das Skript ausführen.')
+
+        # Fusionsdatendienst
+        dataService = app.data
+
+        # Projektname (ändern Sie diesen Wert entsprechend)
+        project_name = 'NXtest'
+
+        # Zugriff auf das Projekt
+        projects = dataService.activeHub.dataProjects
+        project = None
+        for proj in projects:
+            if proj.name == project_name:
+                project = proj
+                break
+
+        if not project:
+            ui.messageBox(f'Projekt nicht gefunden: {project_name}')
             return
-        
-        # Zugriff auf die Root-Komponente des Designs
-        rootComp = design.rootComponent
-        
-        # Schleife durch alle Körper in der Root-Komponente
-        bodies = rootComp.bRepBodies
-        for body in bodies:
-            if body.isSolid:
-                # Volumen auslesen
-                volume = body.physicalProperties.volume
-                
-                # Oberfläche auslesen
-                surface_area = body.physicalProperties.area
-                
-                # Schwerpunkt auslesen
-                center_of_mass = body.physicalProperties.centerOfMass
-                center_of_mass_tuple = (center_of_mass.x, center_of_mass.y, center_of_mass.z)
-                
-                # Materialeigenschaften auslesen
-                material = body.material
-                material_name = material.name if material else "Kein Material zugewiesen"
-                
-                # Massen- und Trägheitseigenschaften auslesen
-                mass = body.physicalProperties.mass
-                inertia_tensor = body.physicalProperties.getXYZMomentsOfInertia()
-                inertia_tuple = (inertia_tensor[0], inertia_tensor[1], inertia_tensor[2])
-                
-                # Anzahl der Flächen, Kanten und Scheitelpunkte
-                num_faces = body.faces.count
-                num_edges = body.edges.count
-                num_vertices = body.vertices.count
-                
-                # Flächeninformationen
-                face_areas = [face.area for face in body.faces]
-                
-                # Kanteninformationen
-                edge_lengths = [edge.length for edge in body.edges]
-                
-                # Scheitelpunktinformationen
-                vertex_coords = [(vertex.geometry.x, vertex.geometry.y, vertex.geometry.z) for vertex in body.vertices]
-                
-                # Überprüfung der Eigenschaften gegen die Vorgabewerte
-                def compare_lists(list1, list2, tolerance=1e-6):
-                    if len(list1) != len(list2):
-                        return False
-                    for a, b in zip(list1, list2):
-                        if isinstance(a, tuple) and isinstance(b, tuple):
-                            if not compare_tuples(a, b, tolerance):
+
+        # Zugriff auf den Root-Ordner des Projekts
+        root_folder = project.rootFolder
+
+        # Liste der zu überprüfenden Dateien im Root-Ordner
+        files_to_check = [item for item in root_folder.dataFiles if item.fileExtension == 'f3d']
+
+        # Funktion zum Überprüfen einer Datei
+        def check_file(file):
+            try:
+                # Öffnen der Datei
+                doc = app.documents.open(file, True)
+
+                # Zugriff auf das aktive Dokument und das Design
+                design = app.activeProduct
+
+                # Überprüfen, ob ein Design geöffnet ist
+                if not design:
+                    ui.messageBox('Die Datei enthält kein gültiges Design: ' + file.name)
+                    return
+
+                # Zugriff auf die Root-Komponente des Designs
+                rootComp = design.rootComponent
+
+                # Schleife durch alle Körper in der Root-Komponente
+                bodies = rootComp.bRepBodies
+                for body in bodies:
+                    if body.isSolid:
+                        # Volumen auslesen
+                        volume = body.physicalProperties.volume
+
+                        # Oberfläche auslesen
+                        surface_area = body.physicalProperties.area
+
+                        # Schwerpunkt auslesen
+                        center_of_mass = body.physicalProperties.centerOfMass
+                        center_of_mass_tuple = (center_of_mass.x, center_of_mass.y, center_of_mass.z)
+
+                        # Materialeigenschaften auslesen
+                        material = body.material
+                        material_name = material.name if material else "Kein Material zugewiesen"
+
+                        # Massen- und Trägheitseigenschaften auslesen
+                        mass = body.physicalProperties.mass
+                        inertia_tensor = body.physicalProperties.getXYZMomentsOfInertia()
+                        inertia_tuple = (inertia_tensor[0], inertia_tensor[1], inertia_tensor[2])
+
+                        # Anzahl der Flächen, Kanten und Scheitelpunkte
+                        num_faces = body.faces.count
+                        num_edges = body.edges.count
+                        num_vertices = body.vertices.count
+
+                        # Flächeninformationen
+                        face_areas = [face.area for face in body.faces]
+
+                        # Kanteninformationen
+                        edge_lengths = [edge.length for edge in body.edges]
+
+                        # Scheitelpunktinformationen
+                        vertex_coords = [(vertex.geometry.x, vertex.geometry.y, vertex.geometry.z) for vertex in body.vertices]
+
+                        # Überprüfung der Eigenschaften gegen die Vorgabewerte
+                        def compare_lists(list1, list2, tolerance=1e-6):
+                            if len(list1) != len(list2):
                                 return False
-                        elif abs(a - b) > tolerance:
-                            return False
-                    return True
+                            for a, b in zip(list1, list2):
+                                if isinstance(a, tuple) and isinstance(b, tuple):
+                                    if not compare_tuples(a, b, tolerance):
+                                        return False
+                                elif abs(a - b) > tolerance:
+                                    return False
+                            return True
 
-                def compare_tuples(tuple1, tuple2, tolerance=1e-6):
-                    return all(abs(a - b) <= tolerance for a, b in zip(tuple1, tuple2))
+                        def compare_tuples(tuple1, tuple2, tolerance=1e-6):
+                            return all(abs(a - b) <= tolerance for a, b in zip(tuple1, tuple2))
 
-                checks = [
-                    ('Körpername', body.name == reference_body['name']),
-                    ('Volumen', abs(volume - reference_body['volume']) <= 1e-6),
-                    ('Oberfläche', abs(surface_area - reference_body['surface_area']) <= 1e-6),
-                    ('Schwerpunkt', compare_tuples(center_of_mass_tuple, reference_body['center_of_mass'])),
-                    ('Material', material_name == reference_body['material']),
-                    ('Masse', abs(mass - reference_body['mass']) <= 1e-6),
-                    ('Trägheitsmomente', compare_tuples(inertia_tuple, reference_body['inertia'])),
-                    ('Anzahl der Flächen', num_faces == reference_body['num_faces']),
-                    ('Anzahl der Kanten', num_edges == reference_body['num_edges']),
-                    ('Anzahl der Scheitelpunkte', num_vertices == reference_body['num_vertices']),
-                    ('Flächenflächen', compare_lists(face_areas, reference_body['face_areas'])),
-                    ('Kantenlängen', compare_lists(edge_lengths, reference_body['edge_lengths'])),
-                    ('Scheitelpunktkoordinaten', compare_lists(vertex_coords, reference_body['vertex_coordinates']))
-                ]
-                
-                # Ergebnisanzeige
-                discrepancies = [check[0] for check in checks if not check[1]]
-                
-                if discrepancies:
-                    ui.messageBox("Die folgenden Eigenschaften stimmen nicht überein:\n" + "\n".join(discrepancies))
-                else:
-                    ui.messageBox("Alle Eigenschaften stimmen mit der Musterlösung überein.")
-                
+                        checks = [
+                            ('Körpername', body.name == reference_body['name']),
+                            ('Volumen', abs(volume - reference_body['volume']) <= 1e-6),
+                            ('Oberfläche', abs(surface_area - reference_body['surface_area']) <= 1e-6),
+                            ('Schwerpunkt', compare_tuples(center_of_mass_tuple, reference_body['center_of_mass'])),
+                            ('Material', material_name == reference_body['material']),
+                            ('Masse', abs(mass - reference_body['mass']) <= 1e-6),
+                            ('Trägheitsmomente', compare_tuples(inertia_tuple, reference_body['inertia'])),
+                            ('Anzahl der Flächen', num_faces == reference_body['num_faces']),
+                            ('Anzahl der Kanten', num_edges == reference_body['num_edges']),
+                            ('Anzahl der Scheitelpunkte', num_vertices == reference_body['num_vertices']),
+                            ('Flächenflächen', compare_lists(face_areas, reference_body['face_areas'])),
+                            ('Kantenlängen', compare_lists(edge_lengths, reference_body['edge_lengths'])),
+                            ('Scheitelpunktkoordinaten', compare_lists(vertex_coords, reference_body['vertex_coordinates']))
+                        ]
+
+                        # Ergebnisanzeige
+                        discrepancies = [check[0] for check in checks if not check[1]]
+
+                        if discrepancies:
+                            return f"Datei: {file.name}\nDie folgenden Eigenschaften stimmen nicht überein:\n" + "\n".join(discrepancies)
+                        else:
+                            return f"Datei: {file.name}\nAlle Eigenschaften stimmen mit der Musterlösung überein."
+
+            except:
+                return f"Fehler beim Überprüfen der Datei: {file.name}\nFehler: {traceback.format_exc()}"
+            finally:
+                # Schließen des Dokuments
+                if doc:
+                    doc.close(False)
+
+        # Protokollierung der Ergebnisse
+        results = []
+        for file in files_to_check:
+            result = check_file(file)
+            results.append(result)
+
+        # Ausgabe der Ergebnisse
+        ui.messageBox("\n\n".join(results))
+
     except:
         if ui:
             ui.messageBox('Fehler: {}'.format(traceback.format_exc()))
 
 # Das Skript ausführen
-run(None)
+#run(None)

@@ -1,4 +1,7 @@
 import adsk.core, adsk.fusion, traceback
+import csv
+import os
+
 
 # Vorgabewerte der Musterlösung
 reference_body = {
@@ -146,8 +149,7 @@ def run(context):
 
                 # Überprüfen, ob ein Design geöffnet ist
                 if not design:
-                    ui.messageBox('Die Datei enthält kein gültiges Design: ' + file.name)
-                    return
+                    return f"Die Datei enthält kein gültiges Design: {file.name}"
 
                 # Zugriff auf die Root-Komponente des Designs
                 rootComp = design.rootComponent
@@ -241,8 +243,16 @@ def run(context):
             result = check_file(file)
             results.append(result)
 
+        # Ergebnisse in einer CSV-Datei speichern
+        output_file = os.path.join(os.path.expanduser('~'), 'Fusion360_Check_Results.csv')
+        with open(output_file, 'w', newline='') as csvfile:
+            csv_writer = csv.writer(csvfile)
+            csv_writer.writerow(['Dateiname', 'Ergebnis'])
+            for result in results:
+                csv_writer.writerow([result.split('\n')[0], result])
+
         # Ausgabe der Ergebnisse
-        ui.messageBox("\n\n".join(results))
+        ui.messageBox("Überprüfung abgeschlossen. Ergebnisse sind in der Datei gespeichert:\n" + output_file)
 
     except:
         if ui:

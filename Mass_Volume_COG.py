@@ -149,7 +149,7 @@ def run(context):
 
                 # Überprüfen, ob ein Design geöffnet ist
                 if not design:
-                    return [file.name, "Die Datei enthält kein gültiges Design"]
+                    return [file.name, "Die Datei enthält kein gültiges Design"], []
 
                 # Zugriff auf die Root-Komponente des Designs
                 rootComp = design.rootComponent
@@ -207,7 +207,6 @@ def run(context):
                             return all(abs(a - b) <= tolerance for a, b in zip(tuple1, tuple2))
 
                         checks = [
-                            ('Körpername', body.name == reference_body['name']),
                             ('Volumen', abs(volume - reference_body['volume']) <= 1e-6),
                             ('Oberfläche', abs(surface_area - reference_body['surface_area']) <= 1e-6),
                             ('Schwerpunkt', compare_tuples(center_of_mass_tuple, reference_body['center_of_mass'])),
@@ -223,7 +222,7 @@ def run(context):
                         ]
 
                         # Ergebnisanzeige
-                        results = [file.name, body.name]
+                        results = [file.name]
                         discrepancies = []
                         for check in checks:
                             if check[1]:
@@ -243,7 +242,7 @@ def run(context):
         # Protokollierung der Ergebnisse
         all_results = []
         headers = [
-            'Dateiname', 'Körpername', 'Volumen', 'Oberfläche', 'Schwerpunkt',
+            'Dateiname', 'Volumen', 'Oberfläche', 'Schwerpunkt',
             'Material', 'Masse', 'Trägheitsmomente', 'Anzahl der Flächen',
             'Anzahl der Kanten', 'Anzahl der Scheitelpunkte', 'Flächenflächen',
             'Kantenlängen', 'Scheitelpunktkoordinaten'
